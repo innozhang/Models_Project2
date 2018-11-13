@@ -38,15 +38,44 @@ const UnitLocked   = 7  // the keypad of the pump is locked
 
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
+
 //
 // Model Power
 //
+const Unplugged = 0
+const Off = 1
+const On = 2
+range ACSetting = Unplugged .. On
 
-POWER = UNPLUGGED,
+AC = A[Unplugged],
+A[s:ACSetting] =
+	(when (s==Unplugged) plug_in -> A[Off]
+	|when (s==Off)   unplug -> A[Unplugged]
+	|when (s==Off)   turn_on -> A[On]
+	|when (s==On)    unplug -> A[Unplugged]
+	|when (s==On)	turn_off -> A[Off]
+	|when (s==On)    supply -> A[s]
+	|when (s==On)    charge -> A[s]).
+//
+// Battery Model
+//
+// Battery capacity
+//
+const EmptyCap = 0
+const LowCap = 1
+const MedCap = 2
+const HighCap = 3
+range BatteryCapT = EmptyCap .. HighCap
 
-UNPLUGGED = (plug_in->turn_on->RUNNING),
-RUNNING = (unplug->POWER
-		  |turn_off->turn_on->RUNNING).
+Battery = B[HighCap],
+B[c:BatteryCapT] =
+	(when (c<=LowCap) notify -> B[c] // notify when capacity is low
+	|when (c<HighCap)  charge -> B[c + 1] // charge when there is capacity
+	|when (c>EmptyCap) discharge -> B[c - 1]). // discharge when it is not empty
+||POWER = (AC || Battery).
+
+
+
 
 
 //
@@ -138,7 +167,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 ).
 
 
-||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
+//||PUMP = (POWER || USERINTERFACE || LINE || ALARM).
 
 
 
