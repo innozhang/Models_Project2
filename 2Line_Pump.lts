@@ -50,8 +50,7 @@ AC = A[Unplugged],
 A[s:ACSetting] =
 	// Unplugged case
 	(when (s==Unplugged) plug_in -> A[Off]
-	// Off cases
-	|when (s==Off)   unplug -> A[Unplugged]
+	//|when (s==Off)   unplug -> A[Unplugged]
 	|when (s==Off)   ac_on -> A[On]
 	// On cases
 	|when (s==On)    unplug -> A[Unplugged]
@@ -145,29 +144,38 @@ SETUP[params:ParamsStateT]
 //
 const MedMax = 1
 range MedCap = 0 .. MedMax
+
+const NoPower = 0
+const HasPower = 1
+range PowerStateT = NoPower .. HasPower
+
 LINE = (confirm_settings -> FILLIN),
 
 FILLIN = 
-	(unplug -> LINE | turn_off -> LINE
+	(turn_off -> LINE
 	|change_settings -> LINE
-	|fill_in -> INFUSION[MedMax]),
+	|fill_in -> INFUSION[MedMax][NoPower]),
 
-INFUSION[c:MedCap] =
-	(unplug -> LINE | turn_off -> LINE
-	|when (c>0) supply -> dispense_main_med_flow -> INFUSION[c - 1] // TODO: fix supply in UI first
-	|when (c>0) discharge -> dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
+INFUSION[c:MedCap][p:PowerStateT] =
+	(turn_off -> LINE
+
+	|when (p==NoPower) supply -> INFUSION[c][HasPower]
+	|when (p==NoPower) discharge -> INFUSION[c][HasPower]
+
+	|when (c>0 && p==HasPower) dispense_main_med_flow -> INFUSION[c - 1][NoPower] // Normal operation
 	|when (c==0) empty_line -> FILLIN
-	|when (c==0) finish -> LINE // TODO: Maybe not correct
+	|when (c==0) finish -> LINE
+
 	|flow_blocked -> BLOCKED[c]
 	|flow_pinched -> PINCHED[c]),
 
 BLOCKED[c:MedCap] = 
-	(unplug -> LINE | turn_off -> LINE
-	|flow_unblocked -> INFUSION[c]),
+	(turn_off -> LINE
+	|flow_unblocked -> INFUSION[c][NoPower]),
 
 PINCHED[c:MedCap] = 
-	(unplug -> LINE | turn_off -> LINE
-	|flow_unpinched -> INFUSION[c]).
+	(turn_off -> LINE
+	|flow_unpinched -> INFUSION[c][NoPower]).
 
 // 
 // Model the alarm
@@ -189,7 +197,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 
 
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}. // TODO: wrong if improve supply priority
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}.
 
 menu USERCONTROLMENU = {plug_in, unplug, ac_on, turn_off, battery_on, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
