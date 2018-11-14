@@ -128,35 +128,26 @@ menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off,
 //
 //Pump in infusion mode:
 //
-LINE = (confirm_settings -> INFUSION),
-INFUSION =
-(
-	unplug -> LINE | turn_off -> LINE
-	|
-	change_settings -> LINE
-	|
-	dispense_main_med_flow -> INFUSION // Normal operation
-	|
-	flow_blocked -> BLOCKED
-	|
-	flow_pinched -> PINCHED
-),
+const MedMax = 3
+range MedCap = 0 .. MedMax
+LINE = (confirm_settings -> FILLIN),
+FILLIN = (fill_in -> INFUSION[MedMax]),
 
-BLOCKED= (
-	unplug -> LINE
-	|
-	turn_off -> LINE
-	|
-	flow_unblocked -> INFUSION
-),
+INFUSION[c:MedCap] =
+	(unplug -> LINE | turn_off -> LINE
+	|change_settings -> LINE
+	|when (c>0) dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
+	|when (c==0) empty -> FILLIN
+	|flow_blocked -> BLOCKED[c]
+	|flow_pinched -> PINCHED[c]),
 
-PINCHED= (
-	unplug -> LINE
-	|
-	turn_off -> LINE
-	|
-	flow_unpinched -> INFUSION
-).
+BLOCKED[c:MedCap] = 
+	(unplug -> LINE | turn_off -> LINE
+	|flow_unblocked -> INFUSION[c]),
+
+PINCHED[c:MedCap] = 
+	(unplug -> LINE | turn_off -> LINE
+	|flow_unpinched -> INFUSION[c]).
 
 // 
 // Model the alarm
