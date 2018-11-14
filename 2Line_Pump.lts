@@ -77,57 +77,38 @@ B[c:BatteryCapT] =
 // Model the User Interface
 //
 
-const NoPower = 0
-const HasPower  = 1
-
-range PowerStateT = NoPower .. HasPower
-
 const NotConfirmed = 0
 const Confirmed = 1
 range ConfirmStateT = NotConfirmed .. Confirmed
 
-USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked][NoPower],
+USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked],
 SETUP[params:ParamsStateT][lineLock:LineLockStateT]
-	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT][powerState:PowerStateT] =
-	(when (powerState == NoPower) supply -> SETUP[params][lineLock][confirmState][unitLock][HasPower]
-	|when (powerState == NoPower) discharge -> SETUP[params][lineLock][confirmState][unitLock][HasPower] // TODO: delete discharge here
-
-	|empty -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
-	|unplug -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
-	|turn_off -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
-
-	|when (powerState == HasPower &&
-		   lineLock == LineUnlocked &&
+	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
+	(when (lineLock == LineUnlocked &&
 		   params == ParamsNotSet)
 		set_rate->enter_value->
-			(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock][powerState]
-			|press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock][powerState])
-	|when (powerState == HasPower &&
-		   params == ParamsSet &&
-		   lineLock == LineUnlocked)
-		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock][powerState]
+			(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock]
+			|press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock])
 	|when (params == ParamsSet &&
 		   lineLock == LineUnlocked)
-		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock][powerState]
-	|when (powerState == HasPower &&
-		   lineLock == LineLocked &&
+		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock]
+	|when (params == ParamsSet &&
+		   lineLock == LineUnlocked)
+		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock]
+	|when (lineLock == LineLocked &&
 		   confirmState == NotConfirmed)
-		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock][powerState]
-	|when (powerState == HasPower &&
-		   lineLock == LineLocked)
-		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock][powerState]	
-	|when (powerState == HasPower &&
-		   confirmState == Confirmed &&
+		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock]
+	|when (lineLock == LineLocked)
+		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock]
+	|when (confirmState == Confirmed &&
 		   unitLock == UnitUnlocked)
-		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock][powerState]
-	|when (powerState == HasPower &&
-		   confirmState == Confirmed &&
+		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock]
+	|when (confirmState == Confirmed &&
 		   unitLock == UnitUnlocked)
-		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked][powerState]
-	|when (powerState == HasPower &&
-		   confirmState == Confirmed &&
+		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked]
+	|when (confirmState == Confirmed &&
 		   unitLock == UnitLocked)
-		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked][powerState]
+		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked]
 ).
 
 //
