@@ -48,9 +48,12 @@ range ACSetting = Unplugged .. On
 
 AC = A[Unplugged],
 A[s:ACSetting] =
+	// Unplugged case
 	(when (s==Unplugged) plug_in -> A[Off]
+	// Off cases
 	|when (s==Off)   unplug -> A[Unplugged]
 	|when (s==Off)   ac_on -> A[On]
+	// On cases
 	|when (s==On)    unplug -> A[Unplugged]
 	|when (s==On)	turn_off -> A[Off]
 	|when (s==On)    supply -> A[s]
@@ -65,13 +68,18 @@ const Capacity = 3
 const AlarmThreshold = 2
 range BatteryCapT = 0 .. Capacity
 
-BATTERY = B[Capacity],
-B[c:BatteryCapT] =
-	(when (c<=AlarmThreshold) notify -> B[c] // notify when capacity is low
-	|when (c<Capacity)  charge -> B[c + 1] // charge when there is capacity
-	|when (c>0) battery_on -> B[c]
-	|when (c>0) discharge -> B[c - 1] // discharge when it is not empty
-	|when (c==0) empty -> B[c]).
+range BSetting = Off .. On
+
+BATTERY = B[Capacity][Off],
+B[c:BatteryCapT][s:BSetting] =
+	(when (s==Off) battery_on -> B[c][On]
+	|when (s==On) battery_off -> B[c][Off]
+	
+	|when (c<Capacity)   charge -> B[c + 1][s]
+	|when (s==On && c>0) discharge -> B[c - 1][s]
+
+	|when (c<=AlarmThreshold) notify -> B[c][s]
+	|when (c==0) empty -> B[c][s]).
 
 //
 // Model the User Interface
@@ -82,16 +90,34 @@ const Confirmed = 1
 range ConfirmStateT = NotConfirmed .. Confirmed
 
 
-USERINTERFACE = (ac_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]
-				|battery_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]),
+USERINTERFACE = (ac_on->SETUP[ParamsNotSet]
+							 [LineUnlocked]
+							 [NotConfirmed]
+							 [UnitUnlocked]
+				|battery_on->SETUP[ParamsNotSet]
+								  [LineUnlocked]
+								  [NotConfirmed]
+								  [UnitUnlocked]),
 
-SETUP[params:ParamsStateT][lineLock:LineLockStateT]
-	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
-	(when (lineLock == LineUnlocked &&
+SETUP[params:ParamsStateT]
+	 [lineLock:LineLockStateT]
+	 [confirmState:ConfirmStateT]
+	 [unitLock:UnitLockStateT] =
+	(empty -> USERINTERFACE
+	|turn_off -> USERINTERFACE
+	|unplug -> USERINTERFACE
+
+	|when (lineLock == LineUnlocked &&
 		   params == ParamsNotSet)
 		set_rate->enter_value->
-			(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock]
-			|press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock])
+			(press_set -> SETUP[ParamsSet]
+							   [lineLock]
+							   [confirmState]
+							   [unitLock]
+			|press_cancel -> SETUP[ParamsNotSet]
+								  [lineLock]
+								  [confirmState]
+								  [unitLock])
 	|when (params == ParamsSet &&
 		   lineLock == LineUnlocked)
 		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock]
@@ -131,7 +157,7 @@ INFUSION[c:MedCap] =
 	|when (c>0) supply -> dispense_main_med_flow -> INFUSION[c - 1] // TODO: fix supply in UI first
 	|when (c>0) discharge -> dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
 	|when (c==0) empty_line -> FILLIN
-	|when (c==0) finish -> END // TODO: Maybe not correct
+	|when (c==0) finish -> LINE // TODO: Maybe not correct
 	|flow_blocked -> BLOCKED[c]
 	|flow_pinched -> PINCHED[c]),
 
@@ -173,4 +199,15 @@ menu USERCONTROLMENU = {plug_in, unplug, ac_on, turn_off, battery_on,
 
 // 1. The pump cannot start pumping without the operator first confirming the settings on the pump
 //fluent PUMP_START = <{}, {}>
-//fluent SETTINGS_CONFIRMED = 
+//fluent SETTINGS_CONFIRMED = <{}>
+
+// 2. Electrical power（AC） can fail at any time
+fluent ELEC_FAIL = <{turn_off, unplug}, {ac_on}>
+assert FAILANYTIME = [](<>ELEC_FAIL)
+
+// 3. If the backup battery power fails, pumping will not occur on any line
+
+// 4. It is always possible to resume pumping after a failure
+
+
+
