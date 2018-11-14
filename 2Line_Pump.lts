@@ -119,33 +119,34 @@ CONFIRMED = (
 //
 //Pump in infusion mode:
 //
-LINE = (confirm_settings->INFUSION[UnitUnlocked]),
-INFUSION[unitLock:UnitLockStateT] =
+LINE = (confirm_settings -> INFUSION),
+INFUSION =
 (
-	unplug -> LINE
+	unplug -> LINE | turn_off -> LINE
 	|
-	turn_off -> LINE
+	change_settings -> LINE
 	|
-	when (unitLock == UnitUnlocked)
-		lock_unit -> INFUSION[UnitLocked]
+	dispense_main_med_flow -> INFUSION // Normal operation
 	|
-	when (unitLock == UnitLocked)
-		change_settings->LINE
+	flow_blocked -> BLOCKED
 	|
-	when (unitLock == UnitLocked)
-		unlock_unit -> INFUSION[UnitUnlocked]
-	|
-	dispense_main_med_flow -> INFUSION[unitLock] // Normal operation
-	|
-	flow_blocked -> BLOCKED[unitLock]
+	flow_pinched -> PINCHED
 ),
 
-BLOCKED[unitLock:UnitLockStateT]= (
+BLOCKED= (
 	unplug -> LINE
 	|
 	turn_off -> LINE
 	|
-	flow_unblocked -> INFUSION[unitLock]
+	flow_unblocked -> INFUSION
+),
+
+PINCHED= (
+	unplug -> LINE
+	|
+	turn_off -> LINE
+	|
+	flow_unpinched -> INFUSION
 ).
 
 // 
@@ -167,7 +168,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 ).
 
 
-//||PUMP = (POWER || USERINTERFACE || LINE || ALARM).
+||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
 
 
 
