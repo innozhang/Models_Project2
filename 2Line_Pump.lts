@@ -7,14 +7,6 @@
 //======================
 
 //
-// States of the pump alarm
-//
-const AlarmActivated = 0    // Alarm currently active
-const AlarmSilenced  = 1    // Alarm currently inactive
-
-range AlarmStateT = AlarmActivated .. AlarmSilenced
-
-//
 // States of the pump settings
 //
 const ParamsNotSet = 2    // pump parameters not set yet
@@ -177,27 +169,40 @@ PINCHED[c:MedCap] =
 	(turn_off -> LINE
 	|flow_unpinched -> INFUSION[c][NoPower]).
 
+//
+// States of the pump alarm
+//
+const AlarmActivated = 0    // Alarm currently active
+const AlarmSilenced  = 1    // Alarm currently inactive
+
+range AlarmStateT = AlarmActivated .. AlarmSilenced
+
+const Blocked = 0
+const Pinched = 1
+const Empty = 2
+
+range AlarmTypeT = Blocked .. Empty
+
 // 
 // Model the alarm
 //
-ALARM = (flow_blocked -> sound_alarm ->INFUSION_BLOCKED[AlarmActivated]),
-INFUSION_BLOCKED[alarm:AlarmStateT] = (
-	unplug->ALARM
-	|
-	turn_off->ALARM
-	|
-	when (alarm == AlarmActivated)
-		sound_alarm->INFUSION_BLOCKED[alarm]
-	|
-	when (alarm == AlarmActivated)
-		silence_alarm->INFUSION_BLOCKED[AlarmSilenced]
-	|
-	flow_unblocked->ALARM
-).
+ALARM = 
+	(flow_blocked -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Blocked]
+	|flow_pinched -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Pinched]
+	|empty_line -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Empty]),
+
+INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] = 
+	(unplug -> ALARM
+	|turn_off -> ALARM
+	|when (alarm == AlarmActivated) sound_alarm -> INFUSION_ALARM[alarm][type]
+	|when (alarm == AlarmActivated) silence_alarm -> INFUSION_ALARM[AlarmSilenced][type]
+	|when (type == Blocked) flow_unblocked -> ALARM
+	|when (type == Pinched) flow_unpinched -> ALARM
+	|when (type == Empty) fill_in -> ALARM).
 
 
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}.
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE || ALARM)<<{supply}.
 
 menu USERCONTROLMENU = {plug_in, unplug, ac_on, turn_off, battery_on, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
