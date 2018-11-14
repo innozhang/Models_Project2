@@ -38,7 +38,6 @@ const UnitLocked   = 7  // the keypad of the pump is locked
 
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
-
 //
 // AC(Alternative Current) Model
 //
@@ -51,7 +50,7 @@ AC = A[Unplugged],
 A[s:ACSetting] =
 	(when (s==Unplugged) plug_in -> A[Off]
 	|when (s==Off)   unplug -> A[Unplugged]
-	|when (s==Off)   turn_on -> A[On]
+	|when (s==Off)   ac_on -> A[On]
 	|when (s==On)    unplug -> A[Unplugged]
 	|when (s==On)	turn_off -> A[Off]
 	|when (s==On)    supply -> A[s]
@@ -66,10 +65,11 @@ const Capacity = 3
 const AlarmThreshold = 2
 range BatteryCapT = 0 .. Capacity
 
-BATTERY = B[Capacity], // TODO: add turn_on here?
+BATTERY = B[Capacity],
 B[c:BatteryCapT] =
 	(when (c<=AlarmThreshold) notify -> B[c] // notify when capacity is low
 	|when (c<Capacity)  charge -> B[c + 1] // charge when there is capacity
+	|when (c>0) battery_on -> B[c]
 	|when (c>0) discharge -> B[c - 1] // discharge when it is not empty
 	|when (c==0) empty -> B[c]).
 
@@ -81,7 +81,10 @@ const NotConfirmed = 0
 const Confirmed = 1
 range ConfirmStateT = NotConfirmed .. Confirmed
 
-USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked],
+
+USERINTERFACE = (ac_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]
+				|battery_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]),
+
 SETUP[params:ParamsStateT][lineLock:LineLockStateT]
 	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
 	(when (lineLock == LineUnlocked &&
@@ -162,7 +165,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
 ||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}. // TODO: wrong if improve supply priority
 
-menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
+menu USERCONTROLMENU = {plug_in, unplug, ac_on, turn_off, battery_on, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
 						connect_purge_lock, erase_and_unlock_line, 
 						confirm_settings, change_settings,
@@ -171,5 +174,3 @@ menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off,
 // 1. The pump cannot start pumping without the operator first confirming the settings on the pump
 //fluent PUMP_START = <{}, {}>
 //fluent SETTINGS_CONFIRMED = 
-
-
