@@ -62,8 +62,8 @@ A[s:ACSetting] =
 //
 // Battery capacity
 //
-const Capacity = 100
-const AlarmThreshold = 10
+const Capacity = 3
+const AlarmThreshold = 2
 range BatteryCapT = 0 .. Capacity
 
 BATTERY = B[Capacity],
@@ -90,7 +90,7 @@ USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked][No
 SETUP[params:ParamsStateT][lineLock:LineLockStateT]
 	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT][powerState:PowerStateT] =
 	(when (powerState == NoPower) supply -> SETUP[params][lineLock][confirmState][unitLock][HasPower]
-	|when (powerState == NoPower) discharge -> SETUP[params][lineLock][confirmState][unitLock][HasPower]
+	|when (powerState == NoPower) discharge -> SETUP[params][lineLock][confirmState][unitLock][HasPower] // TODO: delete discharge here
 
 	|empty -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
 	|unplug -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
@@ -130,20 +130,23 @@ SETUP[params:ParamsStateT][lineLock:LineLockStateT]
 		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked][powerState]
 ).
 
-
 //
 //Pump in infusion mode:
 //
-const MedMax = 3
+const MedMax = 1
 range MedCap = 0 .. MedMax
 LINE = (confirm_settings -> FILLIN),
-FILLIN = (fill_in -> INFUSION[MedMax]),
+
+FILLIN = 
+	(unplug -> LINE | turn_off -> LINE
+	|change_settings -> LINE
+	|fill_in -> INFUSION[MedMax]),
 
 INFUSION[c:MedCap] =
 	(unplug -> LINE | turn_off -> LINE
-	|change_settings -> LINE
 	|when (c>0) dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
-	|when (c==0) empty -> FILLIN
+	|when (c==0) empty_line -> FILLIN
+	|when (c==0) finish -> END // TODO: Maybe not correct
 	|flow_blocked -> BLOCKED[c]
 	|flow_pinched -> PINCHED[c]),
 
@@ -174,11 +177,14 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 ).
 
 
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}.
+//||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE) << {supply}.
 
 menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
-						connect_purge_lock, erase_and_unlock_line, confirm_settings, change_settings}
+						connect_purge_lock, erase_and_unlock_line, 
+						confirm_settings, change_settings,
+						flow_unblocked, flow_unpinched}
 
 // 1. The pump cannot start pumping without the operator first confirming the settings on the pump
 //fluent PUMP_START = <{}, {}>
