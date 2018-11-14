@@ -69,7 +69,6 @@ B[c:BatteryCapT][s:BSetting] =
 	|when (c<Capacity)   charge -> B[c + 1][s]
 	|when (s==On && c>0) discharge -> B[c - 1][s]
 
-	|when (c<=AlarmThreshold) notify -> B[c][s]
 	|when (c==0) empty -> B[c][s]).
 
 //
@@ -94,9 +93,10 @@ SETUP[params:ParamsStateT]
 	 [lineLock:LineLockStateT]
 	 [confirmState:ConfirmStateT]
 	 [unitLock:UnitLockStateT] =
-	(empty -> USERINTERFACE
-	|turn_off -> USERINTERFACE
-	|unplug -> USERINTERFACE
+	(//empty -> USERINTERFACE
+	 turn_off -> USERINTERFACE
+	//|unplug -> USERINTERFACE
+	|battery_off -> USERINTERFACE
 
 	|when (lineLock == LineUnlocked &&
 		   params == ParamsNotSet)
@@ -145,6 +145,7 @@ LINE = (confirm_settings -> FILLIN),
 
 FILLIN = 
 	(turn_off -> LINE
+	|battery_off -> LINE
 	|change_settings -> LINE
 	|fill_in -> INFUSION[MedMax][NoPower]),
 
@@ -152,7 +153,7 @@ INFUSION[c:MedCap][p:PowerStateT] =
 	(turn_off -> LINE
 
 	|when (p==NoPower) supply -> INFUSION[c][HasPower]
-	|when (p==NoPower) discharge -> INFUSION[c][HasPower]
+	|when (p==NoPower) discharge -> INFUSION[c][HasPower] //TODO: concurrency
 
 	|when (c>0 && p==HasPower) dispense_main_med_flow -> INFUSION[c - 1][NoPower] // Normal operation
 	|when (c==0) empty_line -> FILLIN
@@ -202,13 +203,11 @@ INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] =
 
 
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE || ALARM)<<{supply}.
-
-menu USERCONTROLMENU = {plug_in, unplug, ac_on, turn_off, battery_on, 
-						set_rate, enter_value, press_set, press_cancel, clear_rate,
-						connect_purge_lock, erase_and_unlock_line, 
-						confirm_settings, change_settings,
-						flow_unblocked, flow_unpinched}
+||PUMP = (AC || 
+		  BATTERY || 
+		  USERINTERFACE ||
+		  LINE ||
+		  ALARM)<<{supply}.
 
 // 1. The pump cannot start pumping without the operator first confirming the settings on the pump
 //fluent PUMP_START = <{}, {}>
