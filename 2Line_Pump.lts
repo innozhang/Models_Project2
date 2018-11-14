@@ -66,7 +66,7 @@ const Capacity = 3
 const AlarmThreshold = 2
 range BatteryCapT = 0 .. Capacity
 
-BATTERY = B[Capacity],
+BATTERY = B[Capacity], // TODO: add turn_on here?
 B[c:BatteryCapT] =
 	(when (c<=AlarmThreshold) notify -> B[c] // notify when capacity is low
 	|when (c<Capacity)  charge -> B[c + 1] // charge when there is capacity
@@ -144,7 +144,8 @@ FILLIN =
 
 INFUSION[c:MedCap] =
 	(unplug -> LINE | turn_off -> LINE
-	|when (c>0) dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
+	|when (c>0) supply -> dispense_main_med_flow -> INFUSION[c - 1] // TODO: fix supply in UI first
+	|when (c>0) discharge -> dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
 	|when (c==0) empty_line -> FILLIN
 	|when (c==0) finish -> END // TODO: Maybe not correct
 	|flow_blocked -> BLOCKED[c]
@@ -178,7 +179,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 
 
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE) << {supply}.
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE). // TODO: wrong if improve supply priority
 
 menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
