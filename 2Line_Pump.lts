@@ -42,7 +42,7 @@ AC = A[Unplugged],
 A[s:ACSetting] =
 	// Unplugged case
 	(when (s==Unplugged) plug_in -> A[Off]
-	//|when (s==Off)   unplug -> A[Unplugged]
+	// Off cases
 	|when (s==Off)   ac_on -> A[On]
 	// On cases
 	|when (s==On)    unplug -> A[Unplugged]
@@ -159,8 +159,8 @@ INFUSION[c:MedCap][p:PowerStateT] =
 	|when (c==0) empty_line -> FILLIN
 	|when (c==0) finish -> LINE
 
-	|flow_blocked -> BLOCKED[c]
-	|flow_pinched -> PINCHED[c]),
+	|when (p==NoPower) flow_blocked -> BLOCKED[c]
+	|when (p==NoPower) flow_pinched -> PINCHED[c]),
 
 BLOCKED[c:MedCap] = 
 	(turn_off -> LINE
@@ -193,8 +193,7 @@ ALARM =
 	|empty_line -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Empty]),
 
 INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] = 
-	(unplug -> ALARM
-	|turn_off -> ALARM
+	(turn_off -> ALARM
 	|when (alarm == AlarmActivated) sound_alarm -> INFUSION_ALARM[alarm][type]
 	|when (alarm == AlarmActivated) silence_alarm -> INFUSION_ALARM[AlarmSilenced][type]
 	|when (type == Blocked) flow_unblocked -> ALARM
