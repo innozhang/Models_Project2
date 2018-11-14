@@ -131,7 +131,6 @@ SETUP[params:ParamsStateT][lineLock:LineLockStateT]
 ).
 
 
-
 //
 //Pump in infusion mode:
 //
@@ -175,11 +174,14 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 ).
 
 
-||PUMP = (AC || BATTERY || USERINTERFACE)<<{supply}.
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}.
 
 menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
 						connect_purge_lock, erase_and_unlock_line, confirm_settings, change_settings}
 
+// 1. The pump cannot start pumping without the operator first confirming the settings on the pump
+//fluent PUMP_START = <{}, {}>
+//fluent SETTINGS_CONFIRMED = 
 
 
