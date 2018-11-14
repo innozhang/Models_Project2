@@ -62,12 +62,14 @@ A[s:ACSetting] =
 //
 // Battery capacity
 //
-range BatteryCapT = 0 .. 100
+const Capacity = 100
+const AlarmThreshold = 10
+range BatteryCapT = 0 .. Capacity
 
-BATTERY = B[100],
+BATTERY = B[Capacity],
 B[c:BatteryCapT] =
-	(when (c<=10) notify -> B[c] // notify when capacity is low
-	|when (c<100)  charge -> B[c + 1] // charge when there is capacity
+	(when (c<=AlarmThreshold) notify -> B[c] // notify when capacity is low
+	|when (c<Capacity)  charge -> B[c + 1] // charge when there is capacity
 	|when (c>0) discharge -> B[c - 1] // discharge when it is not empty
 	|when (c==0) empty -> B[c]).
 
@@ -84,44 +86,49 @@ const NotConfirmed = 0
 const Confirmed = 1
 range ConfirmStateT = NotConfirmed .. Confirmed
 
-USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][NoPower],
-SETUP[params:ParamsStateT][lineLock:LineLockStateT][confirmState:ConfirmStateT][powerState:PowerStateT] =
-	(when (powerState == NoPower) supply -> SETUP[params][lineLock][confirmState][HasPower]
-	|when (powerState == NoPower) discharge -> SETUP[params][lineLock][confirmState][HasPower]
+USERINTERFACE = SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked][NoPower],
+SETUP[params:ParamsStateT][lineLock:LineLockStateT]
+	 [confirmState:ConfirmStateT][unitLock:UnitLockStateT][powerState:PowerStateT] =
+	(when (powerState == NoPower) supply -> SETUP[params][lineLock][confirmState][unitLock][HasPower]
+	|when (powerState == NoPower) discharge -> SETUP[params][lineLock][confirmState][unitLock][HasPower]
 
-	|empty -> SETUP[params][lineLock][confirmState][NoPower]
-	|unplug -> SETUP[params][lineLock][confirmState][NoPower]
-	|turn_off -> SETUP[params][lineLock][confirmState][NoPower]
+	|empty -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
+	|unplug -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
+	|turn_off -> SETUP[params][lineLock][confirmState][unitLock][NoPower]
 
 	|when (powerState == HasPower &&
 		   lineLock == LineUnlocked &&
 		   params == ParamsNotSet)
 		set_rate->enter_value->
-			(press_set -> SETUP[ParamsSet][lineLock][confirmState][NoPower]
-			|press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][NoPower])
+			(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock][powerState]
+			|press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock][powerState])
 	|when (powerState == HasPower &&
 		   params == ParamsSet &&
 		   lineLock == LineUnlocked)
-		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][NoPower]
+		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock][powerState]
 	|when (params == ParamsSet &&
 		   lineLock == LineUnlocked)
-		connect_purge_lock -> SETUP[params][LineLocked][confirmState][powerState]
+		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock][powerState]
+	|when (powerState == HasPower &&
+		   lineLock == LineLocked &&
+		   confirmState == NotConfirmed)
+		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock][powerState]
 	|when (powerState == HasPower &&
 		   lineLock == LineLocked)
-		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][NoPower]
+		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock][powerState]	
 	|when (powerState == HasPower &&
-		   lineLock == LineLocked)
-		confirm_settings -> SETUP[params][lineLock][Confirmed][NoPower]
+		   confirmState == Confirmed &&
+		   unitLock == UnitUnlocked)
+		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock][powerState]
 	|when (powerState == HasPower &&
-		   confirmState == Confirmed)
-		change_settings -> SETUP[params][lineLock][NotConfirmed][NoPower]
+		   confirmState == Confirmed &&
+		   unitLock == UnitUnlocked)
+		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked][powerState]
+	|when (powerState == HasPower &&
+		   confirmState == Confirmed &&
+		   unitLock == UnitLocked)
+		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked][powerState]
 ).
-
-||PUMP = (AC || BATTERY || USERINTERFACE)<<{supply}.
-
-menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
-						set_rate, enter_value, press_set, press_cancel, clear_rate,
-						connect_purge_lock, erase_and_unlock_line, confirm_settings, change_settings}
 
 
 
@@ -177,7 +184,11 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 ).
 
 
-||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
+||PUMP = (AC || BATTERY || USERINTERFACE)<<{supply}.
+
+menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
+						set_rate, enter_value, press_set, press_cancel, clear_rate,
+						connect_purge_lock, erase_and_unlock_line, confirm_settings, change_settings}
 
 
 
