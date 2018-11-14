@@ -160,7 +160,7 @@ INFUSION_BLOCKED[alarm:AlarmStateT] = (
 
 
 //||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || BATTERY || USERINTERFACE || LINE). // TODO: wrong if improve supply priority
+||PUMP = (AC || BATTERY || USERINTERFACE || LINE)<<{supply}. // TODO: wrong if improve supply priority
 
 menu USERCONTROLMENU = {plug_in, unplug, turn_on, turn_off, 
 						set_rate, enter_value, press_set, press_cancel, clear_rate,
