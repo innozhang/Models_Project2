@@ -147,11 +147,19 @@ INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] =
 	|when (type == Pinched) flow_unpinched -> ALARM
 	|when (type == Empty) fill_in -> ALARM).
 
+const Max = 3
+range Int = 0..Max
+SEMAPHORE(N=0) = SEMA[N],
+SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1]
+                 |when(v>0) {flow_blocked,flow_pinched,empty_line}->SEMA[v-1]
+                 ).
 
 ||PUMP = (POWER ||
-		  USERINTERFACE ||
-		  LINE ||
-		  ALARM).
+		  l[1..2]:USERINTERFACE ||
+		  l[1..2]:LINE ||
+		  l[1..2]:ALARM ||
+		  {l[1..2]}::SEMAPHORE(1))/{power_off/l[1].power_off, power_off/l[2].power_off,
+						          power_on/l[1].power_on, power_on/l[2].power_on}.
 
 
 /*----Property-------*/
@@ -162,7 +170,7 @@ INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] =
 //fluent SETTINGS_CONFIRMED = <{}>
 
 // 2. Electrical power（AC） can fail at any time
-fluent ELEC_FAIL = <{turn_off, unplug}, {ac_on}>
+fluent ELEC_FAIL = <>
 assert FAILANYTIME = [](<>ELEC_FAIL)
 
 // 3. If the backup battery power fails, pumping will not occur on any line
