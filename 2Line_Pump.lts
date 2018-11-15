@@ -63,73 +63,89 @@ const UnitUnlocked = 6
 const UnitLocked   = 7
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
-USERINTERFACE = (power_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]), // power_on starts the UI
+// The quantity of the medication
+const EmptyMed = 0
+const UpperMed = 1
+range MedCapT = EmptyMed .. UpperMed
 
-SETUP[params:ParamsStateT][lineLock:LineLockStateT][confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
+USERINTERFACE = (power_on->SETUP[ParamsNotSet][EmptyMed][LineUnlocked][NotConfirmed][UnitUnlocked]), // power_on starts the UI
+
+SETUP[params:ParamsStateT][med:MedCapT][lineLock:LineLockStateT][confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
 	// If power_off, goes back
-	(power_off->USERINTERFACE 
+	(power_off->USERINTERFACE
+	|when (med == EmptyMed)
+		set_rate->enter_value[m:MedCapT]->SETUP[params][m][lineLock][confirmState][unitLock]
 	// Set or unset the params
-	|when (lineLock == LineUnlocked && params == ParamsNotSet)
-		set_rate->enter_value->(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock]
-			                   |press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock])
+	|when (params == ParamsNotSet && med != EmptyMed)
+		press_set -> SETUP[ParamsSet][med][lineLock][confirmState][unitLock]
+		|press_cancel -> SETUP[ParamsNotSet][EmptyMed][lineLock][confirmState][unitLock]
 	// Clear the already-set params
 	|when (params == ParamsSet && lineLock == LineUnlocked)
-		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock]
+		clear_rate -> SETUP[ParamsNotSet][EmptyMed][lineLock][confirmState][unitLock]
+
 	// Prepare the line and lock it
 	|when (params == ParamsSet && lineLock == LineUnlocked)
-		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock]
+		connect_purge_lock -> SETUP[params][med][LineLocked][confirmState][unitLock]
+
 	// Unlock the line
 	|when (lineLock == LineLocked && confirmState == NotConfirmed)
-		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock]
+		erase_and_unlock_line->SETUP[params][med][LineUnlocked][confirmState][unitLock]
 	// Confirm all the settings
 	|when (lineLock == LineLocked)
-		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock]
+		confirm_settings -> SETUP[params][med][lineLock][Confirmed][unitLock]
 	// Change the settings
 	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
-		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock]
+		change_settings -> SETUP[params][med][lineLock][NotConfirmed][unitLock]
 	// Lock the keypad
 	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
-		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked]
+		lock_unit -> SETUP[params][med][lineLock][confirmState][UnitLocked]
 	// Unlock the keypad
 	|when (confirmState == Confirmed && unitLock == UnitLocked)
-		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked]
+		unlock_unit -> SETUP[params][med][lineLock][confirmState][UnitUnlocked]
 ).
+
 
 //
 // Model the line
 //
 
-// The quantity of the medication
-const MedMax = 1
-range MedCap = 0 .. MedMax
+const LowerVol = 0
+const UpperVol = 1
+range VolT = LowerVol .. UpperVol
 
 // After the confirmation, the infusion can begin
 // Assumption: the initial medicine amount is the max
-LINE = (confirm_settings -> INFUSION[MedMax]
-	   |power_off -> LINE), // power_off to ensure the power failure can happen anytime
+LINE = L[EmptyMed],
+	L[m:MedCapT] =
+	(// take the settings
+	enter_value[nm:MedCapT] -> L[nm]
+	|power_off -> L[m]
+	|confirm_settings -> INFUSION[m][UpperVol]
+	),
 
-INFUSION[c:MedCap] =
+INFUSION[m:MedCapT][v:VolT] =
 	(power_off -> LINE
 	|change_settings -> LINE
-	|when (c>0) dispense -> INFUSION[c - 1] // Normal operation
-	
-	// Assumption: after the medicine is finished, either it is finished or
-	// needs to be refilled
-	|when (c==0) fill_in -> INFUSION[MedMax]
-	|when (c==0) finish -> LINE
-	
-	// Three failure events: line_empty, flow_blocked, flow_pinched
-	|when (c==0) empty_line -> INFUSION[c]
-	|flow_blocked -> BLOCKED[c]
-	|flow_pinched -> PINCHED[c]),
 
-BLOCKED[c:MedCap] = 
-	(power_off -> LINE
-	|flow_unblocked -> INFUSION[c]),
+	|when (m > 0 && v > 0) dispense -> INFUSION[m - 1][v - 1] // Normal operation
+	
+	|when (m > 0 && v == 0) fill_in -> INFUSION[m][UpperVol]
+	|when (m > 0 && v == 0) empty_line -> INFUSION[m][v]
 
-PINCHED[c:MedCap] = 
+	|when (m == 0) finish -> LINE
+	
+	// Two accidents: line_empty, flow_blocked, flow_pinched
+	
+	|flow_blocked -> BLOCKED[m][v]
+	|flow_pinched -> PINCHED[m][v]),
+
+BLOCKED[m:MedCapT][v:VolT] = 
 	(power_off -> LINE
-	|flow_unpinched -> INFUSION[c]).
+	|flow_unblocked -> INFUSION[m][v]),
+
+PINCHED[m:MedCapT][v:VolT] = 
+	(power_off -> LINE
+	|flow_unpinched -> INFUSION[m][v]).
 
 //
 // Model of the Alarm
@@ -181,6 +197,7 @@ SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1] // conditio
 const First = 1
 const Second = 2
 range LineT = First .. Second
+
 
 ||PUMP = (POWER ||
 		  l[LineT]:USERINTERFACE ||
