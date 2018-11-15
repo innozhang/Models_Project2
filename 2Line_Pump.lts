@@ -190,15 +190,19 @@ range LineT = First .. Second
 		  {l[LineT]}::SEMAPHORE(1))/{power_off/l[First].power_off, power_off/l[Second].power_off,
 						            power_on/l[First].power_on, power_on/l[Second].power_on}.
 
-/*----Property-------*/
+/*-------Property-------*/
 
 
-// 1. The pump cannot start pumping without the operator first confirming the settings on the pump
-//fluent PUMP_START = <{}, {}>
-//fluent SETTINGS_CONFIRMED = <{}>
+// 1. The pump cannot start pumping without the operator first confirming the settings on the pump - SAFETY
+fluent PUMP_START = <{power_on},{power_off}>
+fluent SETTINGS_CONFIRMED = <{confirm_settings}, {change_settings}>
 
-// 2. Electrical power（AC） can fail at any time
+// 2. Electrical power（AC） can fail at any time - SAFETY & LIVENESS
+fluent ELEC_FAIL = <{turn_off, unplug}, {ac_on}>
+assert FAILANYTIME = [](<>ELEC_FAIL)
 
-// 3. If the backup battery power fails, pumping will not occur on any line
+// 3. If the backup battery power fails, pumping will not occur on any line - LIVENESS
+// No battery fail scenario?
+//assert BACKUP_FAIL_NOPUMP = []!(dispense_main_med_flow && BACKUP_FAIL)
 
 // 4. It is always possible to resume pumping after a failure
