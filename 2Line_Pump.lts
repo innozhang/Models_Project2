@@ -159,7 +159,7 @@ SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1]
 		  l[1..2]:LINE ||
 		  l[1..2]:ALARM ||
 		  {l[1..2]}::SEMAPHORE(1))/{power_off/l[1].power_off, power_off/l[2].power_off,
-						          power_on/l[1].power_on, power_on/l[2].power_on}.
+						            power_on/l[1].power_on, power_on/l[2].power_on}.
 
 
 /*----Property-------*/
@@ -170,8 +170,6 @@ SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1]
 //fluent SETTINGS_CONFIRMED = <{}>
 
 // 2. Electrical power（AC） can fail at any time
-fluent ELEC_FAIL = <>
-assert FAILANYTIME = [](<>ELEC_FAIL)
 
 // 3. If the backup battery power fails, pumping will not occur on any line
 
