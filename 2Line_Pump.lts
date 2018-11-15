@@ -106,6 +106,7 @@ SETUP[params:ParamsStateT][med:MedCapT][lineLock:LineLockStateT][confirmState:Co
 	// Unlock the keypad
 	|when (confirmState == Confirmed && unitLock == UnitLocked)
 		unlock_unit -> SETUP[params][med][lineLock][confirmState][UnitUnlocked]
+	|finish -> USERINTERFACE
 ).
 
 
