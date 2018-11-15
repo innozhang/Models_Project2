@@ -1,174 +1,121 @@
+
 //
-// 17-651: FSP model of a simple infusion pump
+// Model the power
 //
 
-//======================
-// Constants and Ranges
-//======================
+const BatteryMode = 0
+const ACMode = 1
+range PMode = BatteryMode .. ACMode
+const Off = 0
+const On = 1
+range PSettings = Off .. On
+
+const EmBattery = 0
+const LoBattery = 1
+const HiBattery = 2
+range Capacity = EmBattery .. HiBattery
+
+POWER = P[BatteryMode][Off][HiBattery],
+P[m:PMode][s:PSettings][c:Capacity] = 
+	(when (s==Off) turn_on -> P[m][On][c]
+	|when (s==On) turn_off -> P[m][Off][c]
+	|when (m==BatteryMode) plug_in -> P[ACMode][s][c]
+	|when (m==ACMode) unplug -> P[BatteryMode][s][c]
+
+	|when (m==ACMode && c<=LoBattery) charge -> P[m][s][HiBattery]
+	|when (m==BatteryMode && c==HiBattery && s==On) discharge -> P[m][s][LoBattery]
+	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][Off][EmBattery]
+	|when (m==BatteryMode && c==EmBattery && s==On) skip -> P[m][Off][c]
+
+	|when (s==On) power_on -> P[m][s][c]
+	|when (s==Off) power_off -> P[m][s][c]
+).
+
+
+//
+// Model the User Interface
+//
 
 //
 // States of the pump settings
 //
 const ParamsNotSet = 2    // pump parameters not set yet
 const ParamsSet    = 3    // pump parameters already set
-
 range ParamsStateT = ParamsNotSet .. ParamsSet
-
 //
 // Locked/unlocked states of a line with respect to a pump channel
 //
 const LineUnlocked = 4  // line not locked into a pump channel 
 const LineLocked   = 5  // line locked into a pump channel
-
 range LineLockStateT = LineUnlocked .. LineLocked
 
-//
+
+const NotConfirmed = 0
+const Confirmed = 1
+range ConfirmStateT = NotConfirmed .. Confirmed//
+
 // Locked/unlocked states of the pump unit
 //
 const UnitUnlocked = 6  // the keypad of the pump is not locked
 const UnitLocked   = 7  // the keypad of the pump is locked
-
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
-//
-// AC(Alternative Current) Model
-//
-const Unplugged = 0
-const Off = 1
-const On = 2
-range ACSetting = Unplugged .. On
+USERINTERFACE = (power_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]),
 
-AC = A[Unplugged],
-A[s:ACSetting] =
-	// Unplugged case
-	(when (s==Unplugged) plug_in -> A[Off]
-	// Off cases
-	|when (s==Off)   ac_on -> A[On]
-	// On cases
-	|when (s==On)    unplug -> A[Unplugged]
-	|when (s==On)	turn_off -> A[Off]
-	|when (s==On)    supply -> A[s]
-	|when (s==On)    charge -> A[s]).
+SETUP[params:ParamsStateT][lineLock:LineLockStateT][confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
+	(power_off->USERINTERFACE 
 
-//
-// Battery Model
-//
-// Battery capacity
-//
-const Capacity = 3
-const AlarmThreshold = 2
-range BatteryCapT = 0 .. Capacity
-
-range BSetting = Off .. On
-
-BATTERY = B[Capacity][Off],
-B[c:BatteryCapT][s:BSetting] =
-	(when (s==Off) battery_on -> B[c][On]
-	|when (s==On) battery_off -> B[c][Off]
-	
-	|when (c<Capacity)   charge -> B[c + 1][s]
-	|when (s==On && c>0) discharge -> B[c - 1][s]
-
-	|when (c==0) empty -> B[c][s]).
-
-//
-// Model the User Interface
-//
-
-const NotConfirmed = 0
-const Confirmed = 1
-range ConfirmStateT = NotConfirmed .. Confirmed
-
-
-USERINTERFACE = (ac_on->SETUP[ParamsNotSet]
-							 [LineUnlocked]
-							 [NotConfirmed]
-							 [UnitUnlocked]
-				|battery_on->SETUP[ParamsNotSet]
-								  [LineUnlocked]
-								  [NotConfirmed]
-								  [UnitUnlocked]),
-
-SETUP[params:ParamsStateT]
-	 [lineLock:LineLockStateT]
-	 [confirmState:ConfirmStateT]
-	 [unitLock:UnitLockStateT] =
-	(//empty -> USERINTERFACE
-	 turn_off -> USERINTERFACE
-	//|unplug -> USERINTERFACE
-	|battery_off -> USERINTERFACE
-
-	|when (lineLock == LineUnlocked &&
-		   params == ParamsNotSet)
-		set_rate->enter_value->
-			(press_set -> SETUP[ParamsSet]
-							   [lineLock]
-							   [confirmState]
-							   [unitLock]
-			|press_cancel -> SETUP[ParamsNotSet]
-								  [lineLock]
-								  [confirmState]
-								  [unitLock])
-	|when (params == ParamsSet &&
-		   lineLock == LineUnlocked)
+	|when (lineLock == LineUnlocked && params == ParamsNotSet)
+		set_rate->enter_value->(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock]
+			                   |press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock])
+	|when (params == ParamsSet && lineLock == LineUnlocked)
 		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock]
-	|when (params == ParamsSet &&
-		   lineLock == LineUnlocked)
+	|when (params == ParamsSet && lineLock == LineUnlocked)
 		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock]
-	|when (lineLock == LineLocked &&
-		   confirmState == NotConfirmed)
+	|when (lineLock == LineLocked && confirmState == NotConfirmed)
 		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock]
 	|when (lineLock == LineLocked)
 		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock]
-	|when (confirmState == Confirmed &&
-		   unitLock == UnitUnlocked)
+	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
 		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock]
-	|when (confirmState == Confirmed &&
-		   unitLock == UnitUnlocked)
+	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
 		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked]
-	|when (confirmState == Confirmed &&
-		   unitLock == UnitLocked)
+	|when (confirmState == Confirmed && unitLock == UnitLocked)
 		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked]
 ).
 
+
 //
-//Pump in infusion mode:
+// Model the line
 //
 const MedMax = 1
 range MedCap = 0 .. MedMax
 
-const NoPower = 0
-const HasPower = 1
-range PowerStateT = NoPower .. HasPower
+LINE = (confirm_settings -> INFUSION[MedMax]),
 
-LINE = (confirm_settings -> FILLIN),
-
-FILLIN = 
-	(turn_off -> LINE
-	|battery_off -> LINE
+INFUSION[c:MedCap] =
+	(power_off -> LINE
 	|change_settings -> LINE
-	|fill_in -> INFUSION[MedMax][NoPower]),
-
-INFUSION[c:MedCap][p:PowerStateT] =
-	(turn_off -> LINE
-
-	|when (p==NoPower) supply -> INFUSION[c][HasPower]
-	|when (p==NoPower) discharge -> INFUSION[c][HasPower] //TODO: concurrency
-
-	|when (c>0 && p==HasPower) dispense_main_med_flow -> INFUSION[c - 1][NoPower] // Normal operation
-	|when (c==0) empty_line -> FILLIN
+	|when (c>0) dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
+	
+	|when (c==0) empty_line -> INFUSION[c]
+	|when (c==0) fill_in -> INFUSION[MedMax]
 	|when (c==0) finish -> LINE
 
-	|when (p==NoPower) flow_blocked -> BLOCKED[c]
-	|when (p==NoPower) flow_pinched -> PINCHED[c]),
+	|flow_blocked -> BLOCKED[c]
+	|flow_pinched -> PINCHED[c]),
 
 BLOCKED[c:MedCap] = 
-	(turn_off -> LINE
-	|flow_unblocked -> INFUSION[c][NoPower]),
+	(power_off -> LINE
+	|flow_unblocked -> INFUSION[c]),
 
 PINCHED[c:MedCap] = 
-	(turn_off -> LINE
-	|flow_unpinched -> INFUSION[c][NoPower]).
+	(power_off -> LINE
+	|flow_unpinched -> INFUSION[c]).
+
+//
+// Model of the Alarm
+//
 
 //
 // States of the pump alarm
@@ -193,20 +140,22 @@ ALARM =
 	|empty_line -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Empty]),
 
 INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] = 
-	(turn_off -> ALARM
-	|when (alarm == AlarmActivated) sound_alarm -> INFUSION_ALARM[alarm][type]
+	(when (alarm == AlarmActivated) sound_alarm -> INFUSION_ALARM[alarm][type]
 	|when (alarm == AlarmActivated) silence_alarm -> INFUSION_ALARM[AlarmSilenced][type]
+	
 	|when (type == Blocked) flow_unblocked -> ALARM
 	|when (type == Pinched) flow_unpinched -> ALARM
 	|when (type == Empty) fill_in -> ALARM).
 
 
-//||PUMP = (POWER || USERINTERFACE || l[i:1..2]:LINE || l[i:1..2]::ALARM).
-||PUMP = (AC || 
-		  BATTERY || 
+||PUMP = (POWER ||
 		  USERINTERFACE ||
 		  LINE ||
-		  ALARM)<<{supply}.
+		  ALARM).
+
+
+/*----Property-------*/
+
 
 // 1. The pump cannot start pumping without the operator first confirming the settings on the pump
 //fluent PUMP_START = <{}, {}>
