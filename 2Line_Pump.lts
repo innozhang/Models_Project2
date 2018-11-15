@@ -23,9 +23,12 @@ range Capacity = EmBattery .. HiBattery // The capacity of the battery
 
 POWER = P[BatteryMode][Off][HiBattery],
 P[m:PMode][s:PSettings][c:Capacity] =
-	// On/Off state of the power 
+	// On/Off state of the power by active action 
 	(when (s==Off) power_on -> P[m][On][c]
 	|when (s==On) power_off -> P[m][Off][c]
+	// On/Off state passively
+	|when (s==Off) power_off -> P[m][s][c]
+	|when (s==On) power_on -> P[m][s][c]
 	// Switch between BatteryMode and ACMode
 	|when (m==BatteryMode) plug_in -> P[ACMode][s][c]
 	|when (m==ACMode) unplug -> P[BatteryMode][s][c]
@@ -78,7 +81,8 @@ SETUP[params:ParamsStateT][med:MedCapT][lineLock:LineLockStateT][confirmState:Co
 	// Set or unset the params
 	|when (params == ParamsNotSet && med != EmptyMed)
 		press_set -> SETUP[ParamsSet][med][lineLock][confirmState][unitLock]
-		|press_cancel -> SETUP[ParamsNotSet][EmptyMed][lineLock][confirmState][unitLock]
+	|when (params == ParamsNotSet && med != EmptyMed)
+		press_cancel -> SETUP[ParamsNotSet][EmptyMed][lineLock][confirmState][unitLock]
 	// Clear the already-set params
 	|when (params == ParamsSet && lineLock == LineUnlocked)
 		clear_rate -> SETUP[ParamsNotSet][EmptyMed][lineLock][confirmState][unitLock]
