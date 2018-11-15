@@ -1,108 +1,125 @@
+/*
+ * Project 2: Infusion Pump
+ */
 
 //
 // Model the power
 //
 
+// Mode: Battery or AC?
 const BatteryMode = 0
 const ACMode = 1
-range PMode = BatteryMode .. ACMode
+range PMode = BatteryMode .. ACMode // Power has two modes: with AC or Battery
+
+// State: On or Off?
 const Off = 0
 const On = 1
-range PSettings = Off .. On
+range PSettings = Off .. On // Does power work?
 
 const EmBattery = 0
 const LoBattery = 1
 const HiBattery = 2
-range Capacity = EmBattery .. HiBattery
+range Capacity = EmBattery .. HiBattery // The capacity of the battery
 
 POWER = P[BatteryMode][Off][HiBattery],
-P[m:PMode][s:PSettings][c:Capacity] = 
-	(when (s==Off) turn_on -> P[m][On][c]
-	|when (s==Off) power_off -> P[m][s][c]
-	|when (s==On) turn_off -> P[m][Off][c]
+P[m:PMode][s:PSettings][c:Capacity] =
+	// On/Off state of the power 
+	(when (s==Off) power_on -> P[m][On][c]
+	|when (s==On) power_off -> P[m][Off][c]
+	// Switch between BatteryMode and ACMode
 	|when (m==BatteryMode) plug_in -> P[ACMode][s][c]
 	|when (m==ACMode) unplug -> P[BatteryMode][s][c]
-
+	// In ACMode, charge the battery when necessary
 	|when (m==ACMode && c<=LoBattery) charge -> P[m][s][HiBattery]
+	// In BatteryMode, consume battery when necessary
 	|when (m==BatteryMode && c==HiBattery && s==On) discharge -> P[m][s][LoBattery]
-	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][Off][EmBattery]
-	|when (m==BatteryMode && c==EmBattery && s==On) skip -> P[m][Off][c]
-
-	|when (s==On) power_on -> P[m][s][c]
-)@{turn_on,turn_off,plug_in,unplug,power_off,power_on}.
+	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][s][EmBattery]
+	|when (m==BatteryMode && c==EmBattery && s==On) empty -> P[m][Off][c]
+)@{plug_in,unplug,power_off,power_on}.
 
 
 //
 // Model the User Interface
 //
 
-//
-// States of the pump settings
-//
-const ParamsNotSet = 2    // pump parameters not set yet
-const ParamsSet    = 3    // pump parameters already set
+// Whether the pump parameters are set
+const ParamsNotSet = 2
+const ParamsSet    = 3
 range ParamsStateT = ParamsNotSet .. ParamsSet
-//
-// Locked/unlocked states of a line with respect to a pump channel
-//
-const LineUnlocked = 4  // line not locked into a pump channel 
-const LineLocked   = 5  // line locked into a pump channel
+
+// Whether the line is locked into the panel
+const LineUnlocked = 4
+const LineLocked   = 5
 range LineLockStateT = LineUnlocked .. LineLocked
 
 
+// Whether the user interface is confirmed
 const NotConfirmed = 0
 const Confirmed = 1
-range ConfirmStateT = NotConfirmed .. Confirmed//
+range ConfirmStateT = NotConfirmed .. Confirmed
 
-// Locked/unlocked states of the pump unit
-//
-const UnitUnlocked = 6  // the keypad of the pump is not locked
-const UnitLocked   = 7  // the keypad of the pump is locked
+// Whether the pump unit(keypad) is locked
+const UnitUnlocked = 6
+const UnitLocked   = 7
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
-USERINTERFACE = (power_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]),
+USERINTERFACE = (power_on->SETUP[ParamsNotSet][LineUnlocked][NotConfirmed][UnitUnlocked]), // power_on starts the UI
 
 SETUP[params:ParamsStateT][lineLock:LineLockStateT][confirmState:ConfirmStateT][unitLock:UnitLockStateT] =
+	// If power_off, goes back
 	(power_off->USERINTERFACE 
-
+	// Set or unset the params
 	|when (lineLock == LineUnlocked && params == ParamsNotSet)
 		set_rate->enter_value->(press_set -> SETUP[ParamsSet][lineLock][confirmState][unitLock]
 			                   |press_cancel -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock])
+	// Clear the already-set params
 	|when (params == ParamsSet && lineLock == LineUnlocked)
 		clear_rate -> SETUP[ParamsNotSet][lineLock][confirmState][unitLock]
+	// Prepare the line and lock it
 	|when (params == ParamsSet && lineLock == LineUnlocked)
 		connect_purge_lock -> SETUP[params][LineLocked][confirmState][unitLock]
+	// Unlock the line
 	|when (lineLock == LineLocked && confirmState == NotConfirmed)
 		erase_and_unlock_line->SETUP[params][LineUnlocked][confirmState][unitLock]
+	// Confirm all the settings
 	|when (lineLock == LineLocked)
 		confirm_settings -> SETUP[params][lineLock][Confirmed][unitLock]
+	// Change the settings
 	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
 		change_settings -> SETUP[params][lineLock][NotConfirmed][unitLock]
+	// Lock the keypad
 	|when (confirmState == Confirmed && unitLock == UnitUnlocked)
 		lock_unit -> SETUP[params][lineLock][confirmState][UnitLocked]
+	// Unlock the keypad
 	|when (confirmState == Confirmed && unitLock == UnitLocked)
 		unlock_unit -> SETUP[params][lineLock][confirmState][UnitUnlocked]
 ).
 
-
 //
 // Model the line
 //
+
+// The quantity of the medication
 const MedMax = 1
 range MedCap = 0 .. MedMax
 
+// After the confirmation, the infusion can begin
+// Assumption: the initial medicine amount is the max
 LINE = (confirm_settings -> INFUSION[MedMax]
-	   |power_off -> LINE),
+	   |power_off -> LINE), // power_off to ensure the power failure can happen anytime
 
 INFUSION[c:MedCap] =
 	(power_off -> LINE
 	|change_settings -> LINE
-	|when (c>0) dispense_main_med_flow -> INFUSION[c - 1] // Normal operation
+	|when (c>0) dispense -> INFUSION[c - 1] // Normal operation
 	
-	|when (c==0) empty_line -> INFUSION[c]
+	// Assumption: after the medicine is finished, either it is finished or
+	// needs to be refilled
 	|when (c==0) fill_in -> INFUSION[MedMax]
 	|when (c==0) finish -> LINE
-
+	
+	// Three failure events: line_empty, flow_blocked, flow_pinched
+	|when (c==0) empty_line -> INFUSION[c]
 	|flow_blocked -> BLOCKED[c]
 	|flow_pinched -> PINCHED[c]),
 
@@ -118,50 +135,60 @@ PINCHED[c:MedCap] =
 // Model of the Alarm
 //
 
-//
-// States of the pump alarm
-//
+// Whether the alarm is active
 const AlarmActivated = 0    // Alarm currently active
 const AlarmSilenced  = 1    // Alarm currently inactive
-
 range AlarmStateT = AlarmActivated .. AlarmSilenced
 
+// The causes of the alarm
 const Blocked = 0
 const Pinched = 1
 const Empty = 2
-
 range AlarmTypeT = Blocked .. Empty
 
-// 
-// Model the alarm
-//
-ALARM = 
-	(flow_blocked -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Blocked]
-	|flow_pinched -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Pinched]
-	|empty_line -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Empty]),
+
+ALARM =
+	// They will activate the alarm
+	(flow_blocked -> INFUSION_ALARM[AlarmActivated][Blocked]
+	|flow_pinched -> INFUSION_ALARM[AlarmActivated][Pinched]
+	|empty_line -> INFUSION_ALARM[AlarmActivated][Empty]
+	|power_off -> ALARM), // Power can be off
 
 INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] = 
+	// AlarmActivated cases
 	(when (alarm == AlarmActivated) sound_alarm -> INFUSION_ALARM[alarm][type]
 	|when (alarm == AlarmActivated) silence_alarm -> INFUSION_ALARM[AlarmSilenced][type]
-	
+	// Alarm events are resolved
 	|when (type == Blocked) flow_unblocked -> ALARM
 	|when (type == Pinched) flow_unpinched -> ALARM
-	|when (type == Empty) fill_in -> ALARM).
+	|when (type == Empty) fill_in -> ALARM
+	// Power can be off
+	|power_off -> ALARM).
 
+//
+// Model a SEMAPHORE to protect the Alarm, the shared resource
+//
 const Max = 3
 range Int = 0..Max
-SEMAPHORE(N=0) = SEMA[N],
-SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1]
-                 |when(v>0) {flow_blocked,flow_pinched,empty_line}->SEMA[v-1]
+SEMAPHORE(N=1) = SEMA[N], // the N is num of semaphore, it is 1 in default
+SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1] // conditions to release
+                 |when(v>0) {flow_blocked,flow_pinched,empty_line}->SEMA[v-1] // conditions to acquire
                  ).
 
-||PUMP = (POWER ||
-		  l[1..2]:USERINTERFACE ||
-		  l[1..2]:LINE ||
-		  l[1..2]:ALARM ||
-		  {l[1..2]}::SEMAPHORE(1))/{power_off/l[1].power_off, power_off/l[2].power_off,
-						            power_on/l[1].power_on, power_on/l[2].power_on}.
+//
+// Compose all into a whole PUMP system
+//
+const First = 1
+const Second = 2
+range LineT = First .. Second
 
+||PUMP = (POWER ||
+		  l[LineT]:USERINTERFACE ||
+		  l[LineT]:LINE ||
+		  l[LineT]:ALARM ||
+		  // POWER has impact on all lines, relabeling
+		  {l[LineT]}::SEMAPHORE(1))/{power_off/l[First].power_off, power_off/l[Second].power_off,
+						            power_on/l[First].power_on, power_on/l[Second].power_on}.
 
 /*----Property-------*/
 
@@ -175,6 +202,3 @@ SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1]
 // 3. If the backup battery power fails, pumping will not occur on any line
 
 // 4. It is always possible to resume pumping after a failure
-
-
-
