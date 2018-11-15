@@ -18,6 +18,7 @@ range Capacity = EmBattery .. HiBattery
 POWER = P[BatteryMode][Off][HiBattery],
 P[m:PMode][s:PSettings][c:Capacity] = 
 	(when (s==Off) turn_on -> P[m][On][c]
+	|when (s==Off) power_off -> P[m][s][c]
 	|when (s==On) turn_off -> P[m][Off][c]
 	|when (m==BatteryMode) plug_in -> P[ACMode][s][c]
 	|when (m==ACMode) unplug -> P[BatteryMode][s][c]
@@ -28,8 +29,7 @@ P[m:PMode][s:PSettings][c:Capacity] =
 	|when (m==BatteryMode && c==EmBattery && s==On) skip -> P[m][Off][c]
 
 	|when (s==On) power_on -> P[m][s][c]
-	|when (s==Off) power_off -> P[m][s][c]
-).
+)@{turn_on,turn_off,plug_in,unplug,power_off,power_on}.
 
 
 //
@@ -91,7 +91,8 @@ SETUP[params:ParamsStateT][lineLock:LineLockStateT][confirmState:ConfirmStateT][
 const MedMax = 1
 range MedCap = 0 .. MedMax
 
-LINE = (confirm_settings -> INFUSION[MedMax]),
+LINE = (confirm_settings -> INFUSION[MedMax]
+	   |power_off -> LINE),
 
 INFUSION[c:MedCap] =
 	(power_off -> LINE
