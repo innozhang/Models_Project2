@@ -245,7 +245,10 @@ assert PUMPTILLEMPTY = forall[i:LineT] (ERROR_FREE[i] -> (l[i].dispense U l[i].f
 
 // 7. The system never deadlocks. - SAFETY
 
-// 8.
+// 8. Variables (rate & value) cannot be changed if unit is loocked
+fluent UNIT_LOCK[i:LineT] = <l[i].lock_unit, {l[i].unlock_unit, power_on}>
+assert LOCKVAR = forall[m:MedCapT] forall[i:LineT] 
+		!<>(UNIT_LOCK[i] && {l[i].set_rate, l[i].clear_rate, l[i].enter_value[m]})
 
 // 9. At all times in any execution, the alarm can at most sound for the failure of one line
 // for the reason there is only one alarm
