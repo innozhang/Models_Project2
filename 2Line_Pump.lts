@@ -41,7 +41,7 @@ P[m:PMode][s:PSettings][c:Capacity] =
 	|when (m==BatteryMode && c==HiBattery && s==On) discharge -> P[m][s][LoBattery]
 	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][s][EmBattery]
 	|when (m==BatteryMode && c==EmBattery && s==On) empty-> P[m][Off][c]
-)@{plug_in,unplug,power_off,power_on}. // Incapsulate AC and battery to the concept of POWER
+)@{plug_in,unplug,power_off,power_on}. // Encapsulate AC and battery to the concept of POWER
 
 
 //
@@ -209,7 +209,7 @@ const Second = 2
 range LineT = First .. Second
 
 ||PUMP = (POWER ||
-		  l[LineT]:USERINTERFACE ||
+		  l[LineT]:USERINTERFACE || // Assumption 6: Each line has its own User Interface
 		  l[LineT]:LINE ||
 		  l[LineT]:ALARM ||
 		  // POWER has impact on all lines, relabeling
@@ -229,10 +229,10 @@ fluent ELEC_FAIL = <{unplug}, {plug_in}>
 assert FAILANYTIME = [](<>ELEC_FAIL)
 
 // 3. If the backup battery power fails, pumping will not occur on any line - LIVENESS
+fluent POWER_FAIL = <power_off, power_on>
 assert BACKUPFAILNOPUMP = forall[i:LineT] []!(l[i].dispense && POWER_FAIL)
 
-// 4. It is always possible to resume pumping after a failure - LIVENESS
-fluent POWER_FAIL = <power_off, power_on>
+// 4. It is always possible to resume pumping after a failure
 fluent LINE_FAIL[i:LineT] = <{l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
 							 {l[i].flow_unblocked, l[i].flow_unpinched, l[i].fill_in}>
 assert RESUME = forall[i:LineT] []((LINE_FAIL[i] || POWER_FAIL) -> <>l[i].dispense)
