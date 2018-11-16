@@ -139,7 +139,7 @@ INFUSION[m:MedCapT][v:VolT] =
 
 	|when (m == 0) finish -> LINE
 	
-	// Two accidents: line_empty, flow_blocked, flow_pinched
+	// Three accidents: line_empty, flow_blocked, flow_pinched
 	
 	|flow_blocked -> BLOCKED[m][v]
 	|flow_pinched -> PINCHED[m][v]),
@@ -219,12 +219,15 @@ range LineT = First .. Second
 fluent PUMP_START = <{power_on},{power_off}>
 fluent SETTINGS_CONFIRMED = <{confirm_settings}, {change_settings}>
 
-// 2. Electrical power（AC） can fail at any time - SAFETY & LIVENESS
+// 2. Electrical power (AC) can fail at any time - SAFETY & LIVENESS
 fluent ELEC_FAIL = <{turn_off, unplug}, {ac_on}>
 assert FAILANYTIME = [](<>ELEC_FAIL)
 
 // 3. If the backup battery power fails, pumping will not occur on any line - LIVENESS
 // No battery fail scenario?
-//assert BACKUP_FAIL_NOPUMP = []!(dispense_main_med_flow && BACKUP_FAIL)
+//assert BACKUP_FAIL_NOPUMP = []!(dispense && BACKUP_FAIL)
 
 // 4. It is always possible to resume pumping after a failure
+fluent FAILURE[i:LineT] = <{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
+						   {power_on, l[i].flow_unblocked, l[i].flow_unpinched, l[i].fill_in}>
+assert RESUME = forall[i:LineT] [](FAILURE[i] -> <>l[i].dispense)
