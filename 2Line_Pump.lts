@@ -249,5 +249,5 @@ assert PUMPTILLEMPTY = forall[i:LineT] ([]ERROR_FREE[i] && (l[i].dispense U empt
 // 9. At all times in any execution, the alarm can at most sound for the failure of one line
 // for the reason there is only one alarm
 fluent ALARM_SOUND[i:LineT] = <{l[i].flow_blocked,l[i].flow_pinched,l[i].empty_line},
-							   {l[i].flow_unblocked,l[i].flow_unpinched,l[i].fill_in}>
+							   {l[i].flow_unblocked,l[i].flow_unpinched,l[i].fill_in,power_off}>
 assert NOTALARMTOGETHER = []!(ALARM_SOUND[First] && ALARM_SOUND[Second])
