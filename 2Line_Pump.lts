@@ -131,7 +131,7 @@ INFUSION[m:MedCapT][v:VolT] =
 	(power_off -> LINE
 	|change_settings -> LINE
 
-	|when (m > 0 && v > 0) power_on->dispense -> INFUSION[m - 1][v - 1] // Normal operation
+	|when (m > 0 && v > 0) dispense -> INFUSION[m - 1][v - 1] // Normal operation
 	
 	|when (m > 0 && v == 0) fill_in -> INFUSION[m][UpperVol]
 	|when (m > 0 && v == 0) empty_line -> INFUSION[m][v]
@@ -241,4 +241,10 @@ assert PUMPTILLEMPTY = forall[i:LineT] ([]ERROR_FREE[i] && (l[i].dispense U empt
 
 // 7. The system never deadlocks. - SAFETY
 
-// 8. 
+// 8.
+
+// 9. At all times in any execution, the alarm can at most sound for the failure of one line
+// for the reason there is only one alarm
+fluent ALARM_SOUND[i:LineT] = <{l[i].flow_blocked,l[i].flow_pinched,l[i].empty_line},
+							   {l[i].flow_unblocked,l[i].flow_unpinched,l[i].fill_in}>
+assert NOTALARMTOGETHER = []!(ALARM_SOUND[First] && ALARM_SOUND[Second])
