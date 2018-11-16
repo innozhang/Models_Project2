@@ -218,7 +218,7 @@ range LineT = First .. Second
 // the settings on the pump - SAFETY
 fluent PUMP_START[i:LineT] = <{l[i].dispense}, dummy>
 fluent SETTINGS_CONFIRMED[i:LineT] = <{l[i].confirm_settings}, dummy>
-assert CONFIRMSTART = forall[i:LineT] (!PUMP_START[i] W SETTINGS_CONFIRMED[i])
+assert CONFIRMSTART = forall[i:LineT] (!PUMP_START[i] U SETTINGS_CONFIRMED[i])
 
 // 2. Electrical power（AC） can fail at any time - SAFETY & LIVENESS
 fluent ELEC_FAIL = <{unplug}, {plug_in}>
@@ -239,10 +239,7 @@ assert RESUME = forall[i:LineT] []((LINE_FAIL[i] || POWER_FAIL) -> <>l[i].dispen
 assert SOUND = forall[i:LineT] [](LINE_FAIL[i] -> <>l[i].sound_alarm)
 
 // 6. In the absence of errors the pump will continue to pump until the treatment is finished. - SAFETY
-fluent ERROR_FREE[i:LineT] = <dummy,{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}>
-//assert PUMPTILLEMPTY = forall[i:LineT] (!<>LINE_FAIL[i] && (l[i].dispense U l[i].finish))
-assert PUMPTILLEMPTY = forall[i:LineT] ([]ERROR_FREE][i] && (l[i].dispense U l[i].finish))
-
+assert PUMPTILLEMPTY = forall[i:LineT] (!(LINE_FAIL[i] || POWER_FAIL) -> <>(l[i].dispense U l[i].finish))
 // 7. The system never deadlocks. - SAFETY
 
 // 8.
