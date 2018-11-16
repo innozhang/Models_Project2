@@ -241,7 +241,7 @@ assert SOUND = forall[i:LineT] [](LINE_FAIL[i] -> <>l[i].sound_alarm)
 // 6. In the absence of errors the pump will continue to pump until the treatment is finished. - SAFETY
 fluent ERROR_FREE[i:LineT] = <dummy,{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}>
 //assert PUMPTILLEMPTY = forall[i:LineT] (!<>LINE_FAIL[i] && (l[i].dispense U l[i].finish))
-assert PUMPTILLEMPTY = forall[i:LineT] ([]ERROR_FREE][i] && (l[i].dispense U l[i].finish))
+assert PUMPTILLEMPTY = forall[i:LineT] (ERROR_FREE[i] -> (l[i].dispense U l[i].finish))
 
 // 7. The system never deadlocks. - SAFETY
 
