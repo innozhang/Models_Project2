@@ -41,7 +41,7 @@ P[m:PMode][s:PSettings][c:Capacity] =
 	|when (m==BatteryMode && c==HiBattery && s==On) discharge -> P[m][s][LoBattery]
 	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][s][EmBattery]
 	|when (m==BatteryMode && c==EmBattery && s==On) empty-> P[m][Off][c]
-)@{plug_in,unplug,power_off,power_on}. // Incapsulate AC and battery to the concept of POWER
+)@{plug_in,unplug,power_off,power_on}. // Encapsulate AC and battery to the concept of POWER
 
 
 //
@@ -209,7 +209,7 @@ const Second = 2
 range LineT = First .. Second
 
 ||PUMP = (POWER ||
-		  l[LineT]:USERINTERFACE ||
+		  l[LineT]:USERINTERFACE || // Assumption 6: Each line has its own User Interface
 		  l[LineT]:LINE ||
 		  l[LineT]:ALARM ||
 		  // POWER has impact on all lines, relabeling
