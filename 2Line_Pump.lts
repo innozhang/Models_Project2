@@ -229,10 +229,10 @@ fluent ELEC_FAIL = <{unplug}, {plug_in}>
 assert FAILANYTIME = [](<>ELEC_FAIL)
 
 // 3. If the backup battery power fails, pumping will not occur on any line - LIVENESS
+fluent POWER_FAIL = <power_off, power_on>
 assert BACKUPFAILNOPUMP = forall[i:LineT] []!(l[i].dispense && POWER_FAIL)
 
 // 4. It is always possible to resume pumping after a failure
-fluent POWER_FAIL = <power_off, power_on>
 fluent LINE_FAIL[i:LineT] = <{l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
 							 {l[i].flow_unblocked, l[i].flow_unpinched, l[i].fill_in}>
 assert RESUME = forall[i:LineT] []((LINE_FAIL[i] || POWER_FAIL) -> <>l[i].dispense)
