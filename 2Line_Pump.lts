@@ -169,9 +169,9 @@ range AlarmTypeT = Blocked .. Empty
 
 ALARM =
 	// They will activate the alarm
-	(flow_blocked -> INFUSION_ALARM[AlarmActivated][Blocked]
-	|flow_pinched -> INFUSION_ALARM[AlarmActivated][Pinched]
-	|empty_line -> INFUSION_ALARM[AlarmActivated][Empty]
+	(flow_blocked -> sound_alarm -> INFUSION_ALARM[AlarmActivated][Blocked]
+	|flow_pinched ->sound_alarm -> INFUSION_ALARM[AlarmActivated][Pinched]
+	|empty_line ->sound_alarm -> INFUSION_ALARM[AlarmActivated][Empty]
 	|power_off -> ALARM), // Power can be off
 
 INFUSION_ALARM[alarm:AlarmStateT][type:AlarmTypeT] = 
@@ -193,6 +193,7 @@ range Int = 0..Max
 SEMAPHORE(N=1) = SEMA[N], // the N is num of semaphore, it is 1 in default
 SEMA[v:Int]    = ({flow_unblocked,flow_unpinched,fill_in}->SEMA[v+1] // conditions to release
                  |when(v>0) {flow_blocked,flow_pinched,empty_line}->SEMA[v-1] // conditions to acquire
+				 |power_off->SEMA[N] // restart semaphore after power_off
                  ).
 
 //
@@ -229,11 +230,13 @@ fluent BATTERY_FAIL = <{empty}, {charge}>
 assert BACKUPFAILNOPUMP = forall[i:LineT] []!(l[i].dispense && BATTERY_FAIL)
 
 // 4. It is always possible to resume pumping after a failure
-fluent FAILURE[i:LineT] = <{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
-						   {power_on, l[i].flow_unblocked, l[i].flow_unpinched, l[i].fill_in}>
-assert RESUME = forall[i:LineT] [](FAILURE[i] -> <>l[i].dispense)
+fluent POWER_FAIL = <power_off, power_on>
+fluent LINE_FAIL[i:LineT] = <{l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
+							 {l[i].flow_unblocked, l[i].flow_unpinched, l[i].fill_in}>
+assert RESUME = forall[i:LineT] []((LINE_FAIL[i] || POWER_FAIL) -> <>l[i].dispense)
 
 // 5. An alarm will sound on any line failure (blockage, pinching, empty fluid, or whatever failures you model). - SAFETY
+assert SOUND = forall[i:LineT] [](LINE_FAIL[i] -> <>l[i].sound_alarm)
 
 // 6. In the absence of errors the pump will continue to pump until the treatment is finished. - SAFETY
 fluent ERROR_FREE[i:LineT] = <dummy,{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}>
