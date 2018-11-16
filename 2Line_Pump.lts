@@ -25,9 +25,8 @@ POWER = P[BatteryMode][Off][HiBattery],
 P[m:PMode][s:PSettings][c:Capacity] =
 	// On/Off state of the power by active action 
 	(when (s==Off) power_on -> P[m][On][c]
-	|when (s==On) power_off -> P[m][Off][c]
-	// On/Off state passively
 	|when (s==Off) power_off -> P[m][s][c]
+	|when (s==On) power_off -> P[m][Off][c]
 	|when (s==On) power_on -> P[m][s][c]
 	// Switch between BatteryMode and ACMode
 	|when (m==BatteryMode) plug_in -> P[ACMode][s][c]
@@ -37,7 +36,7 @@ P[m:PMode][s:PSettings][c:Capacity] =
 	// In BatteryMode, consume battery when necessary
 	|when (m==BatteryMode && c==HiBattery && s==On) discharge -> P[m][s][LoBattery]
 	|when (m==BatteryMode && c==LoBattery && s==On) discharge -> P[m][s][EmBattery]
-	|when (m==BatteryMode && c==EmBattery && s==On) empty -> P[m][Off][c]
+	|when (m==BatteryMode && c==EmBattery && s==On) empty-> P[m][Off][c]
 )@{plug_in,unplug,power_off,power_on}.
 
 
@@ -132,7 +131,7 @@ INFUSION[m:MedCapT][v:VolT] =
 	(power_off -> LINE
 	|change_settings -> LINE
 
-	|when (m > 0 && v > 0) dispense -> INFUSION[m - 1][v - 1] // Normal operation
+	|when (m > 0 && v > 0) power_on->dispense -> INFUSION[m - 1][v - 1] // Normal operation
 	
 	|when (m > 0 && v == 0) fill_in -> INFUSION[m][UpperVol]
 	|when (m > 0 && v == 0) empty_line -> INFUSION[m][v]
@@ -218,7 +217,7 @@ range LineT = First .. Second
 // the settings on the pump - SAFETY
 fluent PUMP_START[i:LineT] = <{l[i].dispense}, dummy>
 fluent SETTINGS_CONFIRMED[i:LineT] = <{l[i].confirm_settings}, dummy>
-assert CONFIRMSTART = forall[i:LineT] (!PUMP_START[i] U SETTINGS_CONFIRMED[i])
+assert CONFIRMSTART = forall[i:LineT] (!PUMP_START[i] W SETTINGS_CONFIRMED[i])
 
 // 2. Electrical power（AC） can fail at any time - SAFETY & LIVENESS
 fluent ELEC_FAIL = <{unplug}, {plug_in}>
@@ -228,7 +227,6 @@ assert FAILANYTIME = [](<>ELEC_FAIL)
 // No battery fail scenario?
 fluent BATTERY_FAIL = <{empty}, {charge}>
 assert BACKUPFAILNOPUMP = forall[i:LineT] []!(l[i].dispense && BATTERY_FAIL)
-
 
 // 4. It is always possible to resume pumping after a failure
 fluent FAILURE[i:LineT] = <{power_off, l[i].flow_blocked, l[i].flow_pinched, l[i].empty_line}, 
